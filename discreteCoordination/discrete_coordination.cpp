@@ -41,6 +41,8 @@ float getInferredMapEntropy(Mat &globalInfMat, Mat &workingMat);
 
 int main(){
 
+	cerr << "hello" << endl;
+
 	destroyAllWindows();
 
 	vector<int> treePath;
