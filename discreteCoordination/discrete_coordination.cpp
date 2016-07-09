@@ -30,7 +30,6 @@ using namespace std;
 float getObservedMapEntropy(Mat &globalInfMat, Mat &workingMat);
 float getInferredMapEntropy(Mat &globalInfMat, Mat &workingMat);
 
-
 /* to do
  * -struct inference, simulated annealing with warp afine (rotate) and scale matched image, minimize bitwise_xor for match cost
  * - redo visibility using breadth first search from central node out, evaluated node is projected along vector from center outward. Evaluated node added to closed set. all inside perim in open set
