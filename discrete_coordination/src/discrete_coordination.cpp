@@ -41,7 +41,7 @@ float getInferredMapEntropy(Mat &globalInfMat, Mat &workingMat);
 
 int main(){
 
-	cerr << "hello andy laptop" << endl;
+	cerr << "hello andy laptop2" << endl;
 
 	destroyAllWindows();
 
