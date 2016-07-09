@@ -18,7 +18,7 @@
 #include "opencv2/core/core.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgcodecs.hpp"
+//#include "opencv2/imgcodecs.hpp"
 
 #include "Graph.h"
 #include "MiniGraph.h"
@@ -41,7 +41,7 @@ float getInferredMapEntropy(Mat &globalInfMat, Mat &workingMat);
 
 int main(){
 
-	cerr << "hello andy" << endl;
+	cerr << "hello andy laptop" << endl;
 
 	destroyAllWindows();
 
