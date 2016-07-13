@@ -10,55 +10,100 @@
 using namespace cv;
 using namespace std;
 
-World::World(int gSpace, float obsThresh, float comThresh) {
+World::World(string fName, int gSpace, float obsThresh, float comThresh) {
 	this->gSpace = gSpace;
 	this->obsThresh = obsThresh;
 	this->commThresh = comThresh;
-	string fName = "test2";
-	this->fileName = "/home/andy/Dropbox/workspace/nextGenCoord/" + fName + ".jpg";
-	//this->fileName = "/home/andy/Dropbox/workspace/nextGenCoord/test2.jpg";
 
-	this->image = imread(this->fileName,1);
-	cvtColor(this->image,this->imgGray,CV_BGR2GRAY);
-	threshold(this->image,this->imgGray,250,255,THRESH_BINARY);
+	FileStorage ifile(fName + ".yml", FileStorage::READ);
+	if(true && ifile.isOpened()){
+		cout << "world::loading " << fName << ".yml" << endl;
+		ifile.release();
+		this->pullWorldFromYML(fName);
+		this->costmap.nRows = this->costMap.size();
+		this->costmap.nCols = this->costmap.cells[0].size();
+		this->getDistGraph();
+	}
+	else{
+		cout << "world::building " << fName << ".yml" << endl;
+		ifile.release();
 
+		string fileName = fName + ".jpg";
+		this->image = imread(fileName,1);
+		cvtColor(this->image,this->imgGray,CV_BGR2GRAY);
+		threshold(this->image,this->imgGray,127,255,THRESH_BINARY);
 
-	this->nRows = imgGray.rows;
-	this->nCols = imgGray.cols;
-	cerr << "nRows ? nCols: " << nRows << " ? " << nCols << endl;
-	/*
-	this->initializeMaps();
-	this->getDistGraph();
-	this->nRows = this->costMap.size();
-	this->nCols = this->costMap[0].size();
-	this->getObsGraph();
-	//this->getCommGraph();
-
-	cerr << "into saveWorld" << endl;
-	this->saveWorldToYML();
-	*/
-	this->pullWorldFromYML(fName);
-	this->getDistGraph();
-	this->nRows = this->costMap.size();
-	this->nCols = this->costMap[0].size();
-	cerr << "nRows ? nCols: " << nRows << " ? " << nCols << endl;
-	waitKey(0);
-
+		this->initializeMaps();
+		this->costmap.nRows = this->costMap.size();
+		this->costmap.nCols = this->costmap.cells[0].size();
+		this->getDistGraph();
+		this->getObsGraph();
+		//this->getCommGraph();
+		this->saveWorldToYML(fName);
+	}
 }
 
-void World::saveWorldToYML(){
-	string filename =  "test0.yml";
+void World::observe(vector<int> cLoc, Costmap &costmap){
+
+	for(size_t i=0; i<this->obsGraph[cLoc[0]][cLoc[1]].size(); i++){
+		int a = this->obsGraph[cLoc[0]][cLoc[1]][i][0];
+		int b = this->obsGraph[cLoc[0]][cLoc[1]][i][1];
+		costmap.cells[a][b] = this->costmap.cells[a][b];
+	}
+
+	// set obstacles in costmap
+	int minObs[2], maxObs[2];
+	if(cLoc[0] - this->obsThresh > 0){
+		minObs[0] = cLoc[0]-this->obsThresh;
+	}
+	else{
+		minObs[0] = 0;
+	}
+
+	if(cLoc[0] + this->obsThresh < costmap.nRows){
+		maxObs[0] = cLoc[0]+this->obsThresh;
+	}
+	else{
+		maxObs[0] = costmap.nRows;
+	}
+
+	if(cLoc[1] - this->obsThresh > 0){
+		minObs[1] = cLoc[1]-this->obsThresh;
+	}
+	else{
+		minObs[1] = 0;
+	}
+
+	if(cLoc[1] + this->obsThresh < costmap.nCols){
+		maxObs[1] = cLoc[1]+this->obsThresh;
+	}
+	else{
+		maxObs[1] = costmap.nCols;
+	}
+
+	for(int i=1+minObs[0]; i<maxObs[0]-1; i++){
+		for(int j=1+minObs[1]; j<maxObs[1]-1; j++){
+			if(costmap.cells[i][j] > 200){ // am i an obstacle?
+				for(int k=i-1; k<i+2; k++){
+					for(int l=j-1; l<j+2; l++){
+						if(costmap.cells[k][l] < 10){ // are any of my nbrs visible?
+							costmap.cells[i][j] = 201; // set my cost
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+
+void World::saveWorldToYML(string fName){
+	string filename =  fName + ".yml";
 	FileStorage fs(filename, FileStorage::WRITE);
 
 	fs << "costMap" << "[";
 	for(size_t i=0; i<this->costMap.size(); i++){
-		fs << this->costMap[i];
-	}
-	fs << "]";
-
-	fs << "pointMap" << "[";
-	for(size_t i=0; i<this->pointMap.size(); i++){
-		fs << this->pointMap[i];
+		fs << this->costmap.cells[i];
 	}
 	fs << "]";
 
@@ -76,35 +121,29 @@ void World::saveWorldToYML(){
 		}
 	}
 	fs << "]";
-
 	fs.release();
 }
 
 void World::pullWorldFromYML(string fName){
 
 	FileStorage fsN(fName + ".yml", FileStorage::READ);
-	fsN["costMap"] >> this->costMap;
-	fsN["pointMap"] >> this->pointMap;
-
-
-	this->nRows = this->costMap.size();
-	this->nCols = this->costMap[0].size();
-	this->gSpace = 5;
+	fsN["costMap"] >> this->costmap.cells;
 
 	vector<vector<int> > tObsGraph;
 
 	fsN["obsGraph"] >> tObsGraph;
+	fsN.release();
 
-	cerr << "tObsGraph.size(): " << tObsGraph.size() << " < " << tObsGraph[0].size() << endl;
+	cout << "world::tObsGraph.size(): " << tObsGraph.size() << " < " << tObsGraph[0].size() << endl;
 
-	for(int i=0; i<nRows; i++){
+	for(int i=0; i<this->costmap.nRows; i++){
 		vector<vector<vector<int> > > c;
-		for(int j=0; j<nCols; j++){
+		for(int j=0; j<this->costmap.nCols; j++){
 			vector<vector<int> > a;
-			for(size_t k=0; k<tObsGraph[this->nRows*i+j].size(); k = k+2){
+			for(size_t k=0; k<tObsGraph[this->costmap.nRows*i+j].size(); k = k+2){
 				vector<int> b;
-				b.push_back(tObsGraph[this->nRows*i+j][k]);
-				b.push_back(tObsGraph[this->nRows*i+j][k+1]);
+				b.push_back(tObsGraph[this->costmap.nRows*i+j][k]);
+				b.push_back(tObsGraph[this->costmap.nRows*i+j][k+1]);
 				a.push_back(b);
 			}
 			c.push_back(a);
@@ -112,8 +151,7 @@ void World::pullWorldFromYML(string fName){
 		this->obsGraph.push_back(c);
 	}
 
-	cerr << "obsGraph.size(): " << obsGraph.size() << " < " << obsGraph[0].size() << endl;
-
+	cout << "world::obsGraph.size(): " << obsGraph.size() << " < " << obsGraph[0].size() << endl;
 
 	/*
 	for(int i=0; i<this->obsGraph.size(); i++){
@@ -128,14 +166,14 @@ void World::pullWorldFromYML(string fName){
 }
 
 Mat World::createMiniMapImg(){
-	Mat temp = Mat::zeros(this->nRows, this->nCols,CV_8UC1);
-	for(int i=0; i<this->nRows; i++){
-		for(int j=0; j<this->nCols; j++){
-			if(this->costMap[i][j] > 100){
+	Mat temp = Mat::zeros(this->costmap.nRows, this->costmap.nCols,CV_8UC1);
+	for(int i=0; i<this->costmap.nRows; i++){
+		for(int j=0; j<this->costmap.nCols; j++){
+			if(this->costmap.cells[i][j] > 100){
 				temp.at<uchar>(i,j,0) = 101;
 			}
 			else{
-				temp.at<uchar>(i,j,0) = this->costMap[i][j];
+				temp.at<uchar>(i,j,0) = this->costmap.cells[i][j];
 			}
 		}
 	}
@@ -143,107 +181,73 @@ Mat World::createMiniMapImg(){
 }
 
 void World::initializeMaps(){
-	for(int i=this->gSpace/2; i<this->nRows - this->gSpace/2; i=i+this->gSpace){ // count by gSpace
+	for(int i=0; i<=this->imgGray.rows; i=i+this->gSpace){ // count by gSpace
 		vector<int> tempA;
 		vector<Point> tempP;
-		for(int j=this->gSpace/2; j<this->nCols - this->gSpace/2; j = j+this->gSpace){ // count by gSpace
-			Point p;
-			p.x = j;
-			p.y = i;
-			tempP.push_back(p);
-
+		for(int j=0; j<=this->imgGray.cols; j = j+this->gSpace){ // count by gSpace
 			bool f = true;
-			for(int k=i-this->gSpace/2; k < i+this->gSpace/2 +1; k++){
-				for(int l=j-this->gSpace/2; l < j+this->gSpace/2 +1; l++){
-					Scalar intensity = this->imgGray.at<uchar>(k,l);
-					if(intensity[0] != 255 ){ // is free space
-						f = false;
+			int step = this->gSpace/2;
+			for(int k=i-step; k < i+step+1; k++){
+				if(k >= 0 && k < this->imgGray.rows){
+					for(int l=j-step; l < j+step+1; l++){
+						if(l >= 0 && l < this->imgGray.cols){
+							Scalar intensity = this->imgGray.at<uchar>(k,l,0);
+							if(intensity[0] != 255 ){ // is free space
+								f = false;
+								k = this->imgGray.rows;
+								l = this->imgGray.cols;
+							}
+						}
 					}
 				}
 			}
-
 			if(f){ // is free space
-				tempA.push_back(0);
+				tempA.push_back(1);
 			}
 			else{ // is an obstacle
-				tempA.push_back(255);
+				tempA.push_back(201);
 			}
 		}
-		this->pointMap.push_back(tempP);
-		this->costMap.push_back(tempA);
-	}
-}
-
-float World::getEuclidDist(int x0, int y0, int x1, int y1){
-
-	int bx = abs(x0 - x1);
-	int by = abs(y0 - y1);
-
-	return(this->distGraph[bx][by]);
-}
-
-
-void World::getDistGraph(){
-	for(int i=0; i<this->nCols; i++){
-		vector<float> d;
-		for(int j=0; j<this->nRows; j++){
-			d.push_back(sqrt(pow(i,2) + pow(j,2)));
-		}
-		this->distGraph.push_back(d);
+		this->costmap.cells.push_back(tempA);
 	}
 }
 
 void World::getObsGraph(){
-	for(int i=0; i<this->nRows; i++){
+	for(int i=0; i<this->costmap.nRows; i++){
 		vector<vector<vector<int> > > to; // [yLoc][list][x/y]
-		for(int j=0; j<this->nCols; j++){
+		for(int j=0; j<this->costmap.nCols; j++){
 			vector<vector<int> > too; // [list][x/y]
 			to.push_back(too);
 		}
 		this->obsGraph.push_back(to);
 	}
-
-	//cerr << "costMap.size() / costMap[0].size(): " << this->costMap.size() << " / " << this->costMap[0].size() << endl;
-	for(int i=0; i<this->nRows; i++){
-		//cerr << "i: " << i << endl;
-		for(int j=0; j<this->nCols; j++){ // check each node
-			//cerr << " j: " << j;
-			if(this->costMap[i][j] == 0){ // am I traversable?
-				//cerr << " is traversable" << endl;
-				for(int k=0; k<this->nRows;k++){
-					//cerr << "  k: " << k << endl;
-					for(int l=0; l<this->nCols; l++){ // against all other nodes
-						//cerr << "  l: " << l;
-
-						if(this->costMap[k][l] == 0){ // are they traversable?
-							//cerr << " is traversable*" << endl;
-							//cerr << "i,j,k,l: " << i << ", " << j << ", " << k << ", " << l << endl;
-							//cerr << "pointMap.size() / pointMap[0].size(): " << this->pointMap.size() << " / " << this->pointMap[0].size() << endl;
-							//cerr << this->pointMap[i][j].x << " / " << this->pointMap[i][j].y << endl;
-							//cerr << this->pointMap[k][l].x << " / " << this->pointMap[k][l].y << endl;
-
-							//cerr << "distGraph.size() / distGraph[0].size(): " << this->distGraph.size() << " / " << this->distGraph[0].size() << endl;
-							float dist = this->getEuclidDist(this->pointMap[i][j].y,this->pointMap[i][j].x,this->pointMap[k][l].y,this->pointMap[k][l].x);
-							//cerr << "   pts: " << this->pointMap[i][j].x << "," << this->pointMap[i][j].y << "," << this->pointMap[k][l].x << "," << this->pointMap[k][l].y << endl;
-							//cerr << "   dist: " << dist << endl;
+	for(int i=0; i<this->costmap.nRows; i++){
+		for(int j=0; j<this->costmap.nCols; j++){ // check each node
+			if(this->costmap.cells[i][j] < 10){ // am I traversable?
+				//cout << "cell: " << i << ", " << j << " is traversable" << endl;
+				for(int k=0; k<this->costmap.nRows;k++){
+					for(int l=0; l<this->costmap.nCols; l++){ // against all other nodes
+						if(this->costmap.cells[k][l] < 10){ // are they traversable?
+							//cout << "cell: " << i << ", " << j << " against " << k << ", " << l << ", both traversable*" << endl;
+							float dist = this->getEuclidDist(i,j,k,l);
+							//cout << "   dist: " << dist << endl;
 
 							if(dist < this->obsThresh && dist > 0){ // is it close enough to observe
-								//cerr << i << "," << j << "," << k << "," << l << endl;
-								float unitVecX = (this->pointMap[k][l].x - this->pointMap[i][j].x) / dist; // get unit vector in right direction
-								float unitVecY = (this->pointMap[k][l].y - this->pointMap[i][j].y) / dist;
-								//cerr << "   uVec: " << unitVecX << ", " << unitVecY << endl;
+								//cout << "   dist crit met" << endl;
+								float unitVecX = (k - i) / dist; // get unit vector in right direction
+								float unitVecY = (l - j) / dist;
+								//cout << "   uVec: " << unitVecX << ", " << unitVecY << endl;
 								int steps = dist; // steps to check
 								bool obsFlag = true;
 								for(int m=1; m<steps; m++){ // check all intermediate points between two cells
-									int aX = this->pointMap[i][j].x + m*unitVecX;
-									int aY = this->pointMap[i][j].y + m*unitVecY;
-									Scalar intensity = this->imgGray.at<uchar>(aY,aX);
-									if(intensity[0] != 255 ){
+									int aX = i + m*unitVecX;
+									int aY = j + m*unitVecY;
+									//cout << "   ax / ay: " << aX << " / " << aY << endl;
+									if(this->costmap.cells[aX][aY] > 10 ){
 										obsFlag = false;
 										break;
 									}
 								}
-								//cerr << "   oFlg: " << obsFlag << endl;
 								if(obsFlag){ // are there no obstacles between me and them?
 									vector<int> t;
 									t.push_back(k);
@@ -253,8 +257,8 @@ void World::getObsGraph(){
 							}
 							else if(dist == 0){
 								vector<int> t;
-								t.push_back(k);
-								t.push_back(l);
+								t.push_back(i);
+								t.push_back(j);
 								this->obsGraph[i][j].push_back(t);
 							}
 						}
@@ -268,13 +272,13 @@ void World::getObsGraph(){
 void World::getCommGraph(){
 
 	/*
-	for(int i=0; i<this->nRows; i++){
-		for(int j=0; j<this->nCols; j++){ // check each node
-			if(this->costMap[i][j] == 0){ // am I traversable?
+	for(int i=0; i<this->costmap.nRows; i++){
+		for(int j=0; j<this->costmap.nCols; j++){ // check each node
+			if(this->costmap.cells[i][j] == 0){ // am I traversable?
 
-				for(int k=i; k<this->nRows;k++){
-					for(int l=j; l<this->nCols; l++){ // against all other nodes
-						if(this->costMap[k][l] == 0){ // are they traversable?
+				for(int k=i; k<this->costmap.nRows;k++){
+					for(int l=j; l<this->costmap.nCols; l++){ // against all other nodes
+						if(this->costmap.cells[k][l] == 0){ // are they traversable?
 
 							if(this->pointMap[i][j].distGraph[k][l] < this->commThresh){ // is it close enough to observe
 								float unitVecX = (this->pointMap[k][l].x - this->pointMap[i][j].x) / this->pointMap[i][j].distGraph[k][l]; // get unit vector in right direction
@@ -305,12 +309,6 @@ void World::getCommGraph(){
 	*/
 }
 
-void World::clearPlot(){
-	this->image = imread(this->fileName);
-	cvtColor(this->image,this->imgGray,CV_BGR2GRAY);
-	threshold(this->imgGray,this->imgGray,127,255,THRESH_BINARY);
-}
-
 void World::addCommLine(vector<int> b,vector<int> c){
 	vector<int> a;
 	a.push_back(b[0]);
@@ -326,7 +324,10 @@ void World::plotCommLines(){
 	color[1] = 0;
 	color[2] = 0;
 	for(int i=0; i<(int)this->commLine.size(); i++){
+		// TODO fix world pointmap
+		/*
 		line(this->image,this->pointMap[this->commLine[i][0]][this->commLine[i][1]],this->pointMap[this->commLine[i][2]][this->commLine[i][3]],color,2,8);
+		*/
 	}
 	this->commLine.erase(this->commLine.begin(),this->commLine.end());
 }
@@ -336,13 +337,16 @@ void World::plotTravelGraph(){
 	color[0] = 0;
 	color[1] = 0;
 	color[2] = 0;
-	for(int i=0; i<this->nRows; i++){
-		for(int j=0; j<this->nCols; j++){
-			if(this->costMap[i][j] == 0){ // are they traversable?
+	for(int i=0; i<this->costmap.nRows; i++){
+		for(int j=0; j<this->costmap.nCols; j++){
+			if(this->costmap.cells[i][j] == 0){ // are they traversable?
 
 				for(int k=0; k<2; k++){
-					if(!this->costMap[i][j+k] == 0){
+					if(!this->costmap.cells[i][j+k] == 0){
+						// TODO fix world pointmap
+						/*
 						line(this->image,this->pointMap[i][j],this->pointMap[i][j+k],color,1,8);
+						*/
 					}
 				}
 			}
@@ -366,13 +370,17 @@ Mat World::createExplImage(){
 	color[1] = 255;
 	color[2] = 255;
 	Mat skel(this->image.rows,this->image.cols,CV_8UC1,Scalar(0));
-	for(int i=0; i<this->nRows; i++){
-		for(int j=0; j<this->nCols; j++){
-			if(this->costMap[i][j] == 0){ // are they traversable?
+	for(int i=0; i<this->costmap.nRows; i++){
+		for(int j=0; j<this->costmap.nCols; j++){
+			if(this->costmap.cells[i][j] == 0){ // are they traversable?
+
+				// TODO fix world pointmap
+				/*
 				Point a;
 				a.x = this->pointMap[i][j].x + this->gSpace;
 				a.y = this->pointMap[i][j].y + this->gSpace;
 				rectangle(skel,this->pointMap[i][j],a,color,-1);
+				*/
 			}
 		}
 	}
@@ -387,7 +395,10 @@ void World::plotPath(vector<vector<int> > myPath, int myColor[3], int pathIndex)
 	//for(int i=pathIndex; i<(int)myPath.size(); i++){
 	//	line(this->image,this->pointMap[myPath[i-1]],this->pointMap[myPath[i]],Scalar{myColor[0],myColor[1],myColor[2]},3,8);
 	//}
+	// TODO fix world pointmap
+	/*
 	circle(this->image, this->pointMap[myPath[pathIndex][0]][myPath[pathIndex][1]], 10, color, -1);
+	*/
 	//circle(this->image,this->pointMap[myPath[myPath.size()-1]],10,Scalar{myColor[0],myColor[1],myColor[2]},-1);
 	//circle(this->image,this->pointMap[myPath[myPath.size()-1]],5,Scalar{0,0,0},-1);
 }
@@ -400,5 +411,5 @@ void World::plotMap(){
 }
 
 World::~World() {
-	// TODO Auto-generated destructor stub
+
 }

@@ -17,50 +17,31 @@
 #include "opencv2/highgui/highgui.hpp"
 #include <vector>
 
+#include "Costmap.h"
+
 using namespace cv;
 using namespace std;
 
 class World {
 public:
-	World(int gSpace, float obsThresh, float comThresh);
+	World(string fName, int gSpace, float obsThresh, float comThresh);
 	virtual ~World();
 
-	// build a walls object, so nodes that are built that is constructed as detectected, for inference
-	void saveWorldToYML(); // save a world map to YML
+	// initialize world
+	void saveWorldToYML(string fName); // save a world map to YML
 	void pullWorldFromYML(string fName); // pull world from yml
 	void getObsGraph(); // find nodes that can see eachother
 	void getCommGraph(); // find nodes that can communicate with eachother
-	void getDistGraph(); // calc distance between each node
 	void initializeMaps(); // initialize cost map, point map
 
 	Mat createMiniMapImg(); // for making perfect miniMapImg
 
-	void plotPath(vector<vector<int> >, int[3], int);
-	void plotMap();
-	void clearPlot();
-	void plotTravelGraph();
-	void plotExploreGraph();
-	void plotFrontierGraph(); //
-	void addCommLine(vector<int> b,vector<int> c); //
-	void plotCommLines(); // plot inter agent commo
-	vector<vector<int> > commLine;
-
-	Mat createExplImage();
-
-	vector<vector<int> > costMap; // what the agent uses to navigate
-	vector<vector<Point> > pointMap; // image locations of all points
+	// for working in the world
+	Costmap costmap; // what the agent uses to navigate
 	vector<vector<vector<vector<int> > > > obsGraph; // [xLoc][yLoc][listIndex][0=their xLoc, 1 = their yLoc] list contains all that are observable
-	vector<vector<float> > distGraph; // [dx][dy] = distance
-	float getEuclidDist(int x0, int y0, int x1, int y1);
+	void observe(vector<int> cLoc, Costmap &costmap);
 
-
-	int nCols;
-	int nRows;
 	int gSpace; // spacing, in pixels, between nodes
-	Mat image;
-	Mat imgGray;
-	Mat imgFrnt;
-	String fileName; // filename image is taken from
 
 	float obsThresh; // how far can I see? LOS
 	float commThresh; // how far can I communicate, LOS
