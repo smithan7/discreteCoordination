@@ -21,7 +21,7 @@ using namespace std;
 
 class Frontier {
 public:
-	Frontier(int nRows, int nCols);
+	Frontier(vector<vector<int> > members);
 	virtual ~Frontier();
 
 	vector<float> orient; // unit vector descirbing orientation
@@ -30,6 +30,7 @@ public:
 	float projectionDistance;
 	int area; // area behind this Frontier
 	float reward; // reward for this Frontier
+	float cost; // cost of travel to frontier for owning agent
 
 	vector<vector<int> > obstacles;
 	vector<vector<vector<int> > > obsClusters;
@@ -37,15 +38,8 @@ public:
 	vector<vector<int> > members; // [list][x/y]
 	bool editFlag;
 
-	int nRows;
-	int nCols;
-
-	vector<vector<int> > cSet; // 1 means in closed set, 0 means not
-	vector<vector<int> > oSet; // 1 means in open set, 0 means not
-	vector<vector<float> > gScore; // known cost from initial node to n
-	vector<vector<float> > fScore; // gScore + heuristic score (dist to goal + imposed cost)
-	vector<vector<vector<int> > > cameFrom; // each square has a vector of the location it came from
 	void getFrontierProjection();
+	void getFrontierOrientation(const vector<vector<int> > &costMap);
 
 
 

@@ -18,18 +18,18 @@
 #include "opencv2/core/core.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/highgui/highgui.hpp"
+//#include "opencv2/imgcodecs.hpp"
 
 #include "Graph.h"
-#include "MiniGraph.h"
 #include "Agent.h"
 #include "Frontier.h"
+#include "GraphCoordination.h"
 
 using namespace cv;
 using namespace std;
 
 float getObservedMapEntropy(Mat &globalInfMat, Mat &workingMat);
 float getInferredMapEntropy(Mat &globalInfMat, Mat &workingMat);
-
 
 /* to do
  * -struct inference, simulated annealing with warp afine (rotate) and scale matched image, minimize bitwise_xor for match cost
@@ -44,25 +44,24 @@ int main(){
 	destroyAllWindows();
 
 	vector<int> treePath;
-	int treeGoal;
 	srand(time(NULL));
 	bool videoFlag = true;
 
 	int numAgent = 1;
 	int numIterations = 1;
 
-	int gSpace = 5;
-	float obsThresh = 400;
-	float comThresh = 400;
-
-	World gMap(gSpace, obsThresh, comThresh);
+	int gSpace = 4;
+	float obsThresh = 100;
+	float comThresh = 100;
+	string fName = "test6";
+	World gMap(fName, gSpace, obsThresh, comThresh);
 	cout << "made world" << endl;
 	vector<vector<int> > sLoc;
 	for(int i=0; i<numIterations; i++){
 		while(true){
-			int tRow = rand() % gMap.nRows;
-			int tCol = rand() % gMap.nCols;
-			if(gMap.costMap[tRow][tCol] == 0){ // its not an obstacle
+			int tRow = rand() % gMap.costmap.nRows;
+			int tCol = rand() % gMap.costmap.nCols;
+			if(gMap.costmap.cells[tRow][tCol] == 1){ // its not an obstacle
 				vector<int> s;
 				s.push_back(tRow);
 				s.push_back(tCol);
@@ -74,12 +73,8 @@ int main(){
 	cout << "chose sLoc" << endl;
 
 	for(int fu = 0; fu<numIterations; fu++){
-
 		Graph master;
-		master.createGraph(gMap, obsThresh, comThresh, gSpace);
-
-		cout << "made master" << endl;
-		MiniGraph miniMaster;
+		master.createGraph(gMap, obsThresh, comThresh);
 
 		vector<Agent> bot;
 		bot.push_back(Agent());
@@ -96,14 +91,13 @@ int main(){
 		*/
 
 		for(int i=0; i<numAgent; i++){
-			master.observe(bot[i].cLoc, gMap);
+			gMap.observe(bot[i].cLoc, bot[i].costmap);
 		}
 
 		master.findFrontiers();
-		master.clusterFrontiers(gMap);
-		master.buildCostMapPlot(gMap);
+		master.buildCostMapPlot();
 		for(int i=0; i<numAgent; i++){
-			master.addAgentToPlot(gMap, bot[i]);
+			master.costmap.addAgentToPlot();
 		}
 		master.showCostMapPlot(0);
 		cout << "ready to begin, press any key" << endl;
@@ -112,56 +106,54 @@ int main(){
 
 		int timeSteps = -1;
 		while(master.frntsExist && timeSteps < 100){
-			cerr << "main while loop start" << endl;
+			cout << "main while loop start" << endl;
 			timeSteps++;
 
 			for(int i=0; i<numAgent; i++){
-				master.observe(bot[i].cLoc, gMap);
+				gMap.observe(bot[i].cLoc, bot[i].costmap);
 			}
 			master.findFrontiers();
-			master.clusterFrontiers(gMap);
 
-			cerr << "main while loop0: " << master.frntsExist <<  endl;
+			cout << "main while loop0: " << master.frntsExist <<  endl;
 
-			Mat naiveCostMap = master.makeNaiveMatForMiniMap(); // naive to remaining space
-			cerr << "made naive" << endl;
-			Mat inferredGeometricCostMap = master.makeGeometricInferenceMatForMiniMap(); // inferred remaining space
-			cerr << "made geometric" << endl;
+			Mat naiveCostMap = master.inference.makeNaiveMatForMiniMap(); // naive to remaining space
+			cout << "made naive" << endl;
+			Mat inferredGeometricCostMap = master.inference.makeGeometricInferenceMatForMiniMap(); // inferred remaining space
+			cout << "made geometric" << endl;
 			//Mat inferredStructuralCostMap = master.makeStructuralInferenceMatForMiniMap();
-			Mat inferredGlobalCostMap = master.makeGlobalInferenceMat(gMap); // all remaining space
-			cerr << "made global" << endl;
+			Mat inferredGlobalCostMap = master.inference.makeGlobalInferenceMat(gMap); // all remaining space
+			cout << "made global" << endl;
 
 			float observedEntropy = getObservedMapEntropy(inferredGlobalCostMap, naiveCostMap);
 			float inferredEntropy = getInferredMapEntropy(inferredGlobalCostMap, inferredGeometricCostMap);
 
-			namedWindow("naive Costmap", WINDOW_NORMAL);
-			imshow("naive Costmap", naiveCostMap);
+			namedWindow("main::naive Costmap", WINDOW_NORMAL);
+			imshow("main::naive Costmap", naiveCostMap);
 
-			namedWindow("inferred Geo Costmap", WINDOW_NORMAL);
-			imshow("inferred Geo Costmap", inferredGeometricCostMap);
+			namedWindow("main::inferred Geo Costmap", WINDOW_NORMAL);
+			imshow("main::inferred Geo Costmap", inferredGeometricCostMap);
 
-			namedWindow("inferred Global Costmap", WINDOW_NORMAL);
-			imshow("inferred Global Costmap", inferredGlobalCostMap);
+			namedWindow("main::inferred Global Costmap", WINDOW_NORMAL);
+			imshow("main::inferred Global Costmap", inferredGlobalCostMap);
 			waitKey(1);
 
 			// build miniMap
 			cout << "building miniMap" << endl;
 
-			miniMaster.importFrontiers(master.frontiersList);
+			miniMaster.importFrontiers(master.frontiers);
 			for(int i=0; i<numAgent; i++){ 		// import UAV locations
 				miniMaster.cLocList.push_back(bot[i].cLoc);
 			}
 
-			cerr << "main while loop1: " << master.frntsExist <<  endl;
+			cout << "main while loop1: " << master.frntsExist <<  endl;
 
-
-			miniMaster.createMiniGraph(inferredGeometricCostMap);
-			cerr << "into display" << endl;
+			miniMaster.createMiniGraph(inferredGlobalCostMap);
+			cout << "into display" << endl;
 			miniMaster.displayCoordMap();
-			cerr << "out of display" << endl;
-			miniMaster.cNode = miniMaster.findNearestNode(bot[0].cLoc);
+			cout << "out of display" << endl;
+			miniMaster.cState = miniMaster.findNearestNode(bot[0].cLoc);
 
-			cerr << "main while loop2: " << master.frntsExist <<  endl;
+			cout << "main while loop2: " << master.frntsExist <<  endl;
 
 
 			// masterGraph planning /////////////////////////////////////////////////////////////////////////////////////
@@ -169,25 +161,25 @@ int main(){
 			int gNode = bot[0].gNode;
 			if(timeSteps % 1 == 0){
 				gNode = miniMaster.masterGraphPathPlanning(maxPathLength, 10000, 10000);
-				cerr << "out of masterGraphPathPlanning" << endl;
+				cout << "out of masterGraphPathPlanning" << endl;
 				bot[0].gNode = gNode;
 			}
-			cerr << "gNode: " << gNode << endl;
+			cout << "gNode: " << gNode << endl;
 			vector<int> gLoc;
 			gLoc.push_back(miniMaster.graf[gNode][0]);
 			gLoc.push_back(miniMaster.graf[gNode][1]);
 
-			cerr << "main while loop3: " << master.frntsExist <<  endl;
+			cout << "main while loop3: " << master.frntsExist <<  endl;
 
 
 			/*
 			// tsp path planner ///////////////////////////////////////////////////////////////////////////////////////////
-			cerr << "into tsp" << endl;
+			cout << "into tsp" << endl;
 			vector<int> path = miniMaster.tspPathPlanner(2000,1);
 			for(size_t i=0; i<path.size(); i++){
 				cout << path[i] << endl;
 			}
-			cerr << "out of tsp" << endl;
+			cout << "out of tsp" << endl;
 
 			vector<int> gLoc;
 			gLoc.push_back(miniMaster.graf[path[1]][0]);
@@ -199,11 +191,11 @@ int main(){
 			vector<int> path;
 			miniMaster.mctsPathPlanner(path, 1000, 10000);
 
-			cerr << "mctsPath: ";
+			cout << "mctsPath: ";
 			for(size_t i=0; i<path.size(); i++){
-				cerr << path[i] << ", ";
+				cout << path[i] << ", ";
 			}
-			cerr << endl;
+			cout << endl;
 
 			vector<int> gLoc;
 			gLoc.push_back(miniMaster.graf[path[1]][0]);
@@ -216,7 +208,7 @@ int main(){
 
 			/////////////////////////////////////// Update UAV path
 			for(int i=0; i<numAgent; i++){
-				cerr << "into A*" << endl;
+				cout << "into A*" << endl;
 				bot[i].myPath = master.aStarPath( bot[i].cLoc, gLoc, gMap);
 				cout << "out of A*" << endl;
 				if(bot[i].myPath.size() > 0){
@@ -226,18 +218,18 @@ int main(){
 			}
 			cout << "out of updating path" << endl;
 
-			cerr << "main while loop4: " << master.frntsExist <<  endl;
+			cout << "main while loop4: " << master.frntsExist <<  endl;
 
 
 			//////////////////////////////////////////////////// End update path
 			// build dispay
 			cout << "build display" <<endl;
-			master.buildCostMapPlot(gMap);
-			cerr << "main while loop5: " << master.frntsExist <<  endl;
+			master.buildCostMapPlot();
+			cout << "main while loop5: " << master.frntsExist <<  endl;
 			for(int i=0; i<numAgent; i++){
-				master.addAgentToPlot(gMap, bot[i]);
+				master.addAgentToPlot(bot[i]);
 			}
-			cerr << "main while loop6 : " << master.frntsExist <<  endl;
+			cout << "main while loop6 : " << master.frntsExist <<  endl;
 
 			master.showCostMapPlot(0);
 			waitKey(1);
@@ -256,9 +248,9 @@ int main(){
 		*/
 
 			cout << "---------------- ---------------------------timeSteps: " << timeSteps << endl;
-			cerr << "main while loop end: " << master.frntsExist << endl;
-			cerr << "observedEntropy: " << observedEntropy << endl;
-			cerr << "inferredEntropy: " << inferredEntropy << endl;
+			cout << "main while loop end: " << master.frntsExist << endl;
+			cout << "observedEntropy: " << observedEntropy << endl;
+			cout << "inferredEntropy: " << inferredEntropy << endl;
 			waitKey(1);
 		}
 		cout << "finished program in " << timeSteps << endl;

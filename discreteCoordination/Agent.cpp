@@ -17,8 +17,6 @@ void Agent::buildAgent(vector<int> sLoc, int myIndex, World &gMap, float obsThre
 	this->obsThresh = obsThresh;
 	this->comThresh = comThresh;
 	//this->myMap.createGraph(gMap, obsThresh, comThresh, gMap.gSpace);
-	this->gLocValue = 0;
-	this->fRadius = 5*gMap.gSpace;
 
 	this->cLoc.push_back(sLoc[0]);
 	this->cLoc.push_back(sLoc[1]);
@@ -77,52 +75,24 @@ void Agent::buildAgent(vector<int> sLoc, int myIndex, World &gMap, float obsThre
 	}
 }
 
+void Agent::shareMap(Costmap &A, Costmap &B){
+	for(int i=0; i<A.nCols; i++){
+		for(int j=0; j<A.nRows; j++){
+			if(A.cells[i][j] == 101 && B.cells[i][j] != 101){ // I dont think its observed, they do
+				A.cells[i][j] = B.cells[i][j];
+			}
+			else if(A.cells[i][j] != 101 && B.cells[i][j] == 101){
+				B.cells[i][j] = A.cells[i][j];
+			}
+		}
+	}
+}
+
 void Agent::shareGoals(vector<int> inG, int inI){
 	this->goalList[inI] = inG;
 }
 
-int Agent::marketNodeSelect(World &gMap){
-	//this->cNode = this->myMiniMap.findNearestNode(this->cLoc); // find node I am closest to
-	//this->myMiniMap.getNodeCosts(this->cNode); // get node costs
-	//this->myMiniMap.getNodeRewards(); // get node costs
-	//this->myMiniMap.getNodeValues(); // get node costs
-	//this->gNode = this->myMiniMap.getMaxIndex(this->myMiniMap.nodeValue);
-	//this->gLoc[1] = this->myMiniMap.frontiers[this->myMiniMap.nodeFrontiers[this->gNode][0]][1];
-	//this->gLoc[0] = this->myMiniMap.frontiers[this->myMiniMap.nodeFrontiers[this->gNode][0]][0];
-	//cerr << "cNode: " << this->cNode << endl;
-	//cerr << "gNode: " << this->gNode << endl;
-	//this->myMiniMap.drawCoordMap(this->cLoc);
-
-	/*
-	this->myMap.frontierCosts(this->cLoc, gMap);
-	int maxdex;
-	float maxVal = 0;
-	this->myMap.frntValue.erase(this->myMap.frntValue.begin(),this->myMap.frntValue.end());
-	for(int i=0; i<this->myMap.frntCost.size(); i++){
-		this->myMap.frntValue.push_back(this->myMap.frntReward[i] - this->myMap.frntCost[i]);
-	}
-	int fGoal = this->myMap.getMaxIndex(this->myMap.frntValue);
-
-	this->gLoc = this->myMap.frntCentroid[fGoal];
-	*/
-}
-
-void Agent::greedyFrontiers(){
-
-}
-
-
-float Agent::getFrontierCost(int fIndex, World &gMap){
-//	float dist = this->myMap.aStarDist(this->cLoc, this->myMap.frntList[fIndex], gMap);
-//	return dist;
-}
-
-
-void Agent::aStarPathPlanning(World &gMap){
-//	this->myPath = this->myMap.aStarPath(this->cLoc, this->gLoc, gMap);
-}
-
 Agent::~Agent() {
-	// TODO Auto-generated destructor stub
+
 }
 

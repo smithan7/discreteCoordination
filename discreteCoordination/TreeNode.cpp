@@ -184,5 +184,5 @@ int TreeNode::simAnnealingChildSelect(float& temp, float cooling = 0.99){
 
 
 TreeNode::~TreeNode() {
-	// TODO Auto-generated destructor stub
+
 }

@@ -19,43 +19,48 @@
 #include <stdio.h>
 #include <vector>
 
-#include "MiniGraph.h"
+#include "Graph.h"
 #include "World.h"
+#include "Costmap.h"
 
 using namespace std;
 
 class Agent{
 public:
-	//graph myMap;
-	//miniGraph myMiniMap;
 
+	// agent stuff
+	Agent();
+	void buildAgent(vector<int> sLoc, int myIndex, World &gMap, float comThresh, float obsThresh);
+	~Agent();
+	void shareCostmap(Costmap &A, Costmap &B);
+	void shareGoals(vector<int> inG, int index);
+	int myIndex;
 	int myColor[3];
-	vector<int> cLoc; // for map
-	vector<int> gLoc; // for map
-	int gIndex; // index of frontier I am after
-
-	int cNode; // for miniMap
-	int gNode; // for miniMap
-
 	float comThresh;
 	float obsThresh;
 
-	int myIndex;
-	vector<vector<int> > myPath;
-	vector<vector<int> > goalList;
-	vector<float> fCost;
-	float gLocValue;
-	float fRadius;
-	vector<float> minPubCost;
+	// graph class stuff
+	Graph graph;
+	GraphCoordination graphCoordination;
+	GraphPlanning graphPlanning;
+	int cNode;
+	int gNode;
+	vector<int> nodePath;
 
-	Agent();
-	void buildAgent(vector<int> sLoc, int myIndex, World &gMap, float comThresh, float obsThresh);
-	void aStarPathPlanning(World &gMap);
-	float getFrontierCost(int fIndex, World &gMap);
-	void shareGoals(vector<int> inG, int index);
+	// costmap class stuff
+	Costmap costmap;
+	CostmapCoordination costmapCoordination;
+	CostmapPlanning costmapPlanning;
+	vector<int> cLoc; // for map
+	vector<int> gLoc; // for map
+	vector<vector<int> > myPath;
+
+	// inference stuff
+	Inference inference;
+
+
 	int marketNodeSelect(World &gMap);
 	void greedyFrontiers();
-	virtual ~Agent();
 };
 
 #endif /* SRC_Agent_H_ */
